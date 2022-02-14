@@ -5,11 +5,20 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python: Current File",
+            "name": "khiin_db",
             "type": "python",
             "request": "launch",
-            "program": "${file}",
-            "console": "integratedTerminal"
+            "program": "${workspaceFolder}/src/sql_gen.py",
+            "console": "integratedTerminal",
+            "args": ["-f", "data/frequency.csv", "-c", "data/conversions_all.csv", "-s", "data/syllables.txt", "-o", "out/khiin_db.sql", "-d", "out/khiin.db"]
+        },
+        {
+            "name": "khiin_test_db",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/sql_gen.py",
+            "console": "integratedTerminal",
+            "args": ["-x", "-j", "-f", "data/frequency.csv", "-c", "data/conversions_sample.csv", "-o", "out/khiin_test_db.sql", "-d", "out/khiin_test.db"]
         }
     ]
 }
