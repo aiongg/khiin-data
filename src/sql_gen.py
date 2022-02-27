@@ -32,7 +32,6 @@ def normalize_loji(input, strip_tones=False):
 spinner = itertools.cycle(['-', '/', '|', '\\'])
 def show_progress():
     global spinner
-    # print('.', end='', flush=True)
     sys.stdout.write(next(spinner))
     sys.stdout.flush()
     sys.stdout.write('\b')
@@ -224,6 +223,129 @@ CREATE TABLE IF NOT EXISTS "bigram_freq" (
 CREATE INDEX IF NOT EXISTS "bigram_freq_gram_index" ON "bigram_freq" ("lgram", "rgram");
 """
 
+def punctuation_sql():
+    return """DROP TABLE IF EXISTS "punctuation";
+CREATE TABLE "punctuation" (
+	"id"           INTEGER PRIMARY KEY,
+	"input"        TEXT NOT NULL,
+	"output"       TEXT NOT NULL,
+	"annotation"   TEXT,
+	UNIQUE("input","output")
+);
+INSERT INTO "punctuation" ("input", "output") VALUES
+("!", "!"),
+("!", "！"),
+(\"\"\"\", \"\"\"\"),
+(\"\"\"\", "＂"),
+(\"\"\"\", "“”"),
+(\"\"\"\", "‘’"),
+("#", "#"),
+("#", "＃"),
+("$", "$"),
+("$", "¢"),
+("$", "£"),
+("$", "¥"),
+("$", "€"),
+("$", "₩"),
+("$", "＄"),
+("$", "￠"),
+("$", "￡"),
+("$", "￥"),
+("$", "￦"),
+("$", "₿"),
+("%", "％"),
+("&", "＆"),
+("''", "''"),
+("''", "＇"),
+("''", "’"),
+("''", "‘’"),
+("(", "("),
+("(", "（"),
+("(", "｟"),
+(")", ")"),
+(")", "）"),
+(")", "｠"),
+("*", "*"),
+("*", "＊"),
+("+", "+"),
+("+", "＋"),
+(",", ","),
+(",", "、"),
+(",", "・"),
+("-", "-"),
+("-", "－"),
+("-", "–"),
+("-", "—"),
+(".", "."),
+(".", "。"),
+(".", "…"),
+(".", "。。。"),
+("/", "/"),
+("/", "／"),
+(":", ":"),
+(":", "："),
+(";", ";"),
+(";", "；"),
+("<", "<"),
+("<", "＜"),
+("<", "〈"),
+("<", "《"),
+("<", "≪"),
+("<", "«"),
+("<", "‹"),
+("<", "←"),
+("=", "="),
+("=", "＝"),
+(">", ">"),
+(">", "＞"),
+(">", "〉"),
+(">", "》"),
+(">", "≫"),
+(">", "»"),
+(">", "›"),
+(">", "→"),
+("?", "?"),
+("?", "？"),
+("@", "@"),
+("@", "＠"),
+("[", "["),
+("[", "「"),
+("[", "『"),
+("[", "【"),
+("[", "［"),
+("[", "〔"),
+("[", "〖"),
+("[", "〚"),
+("\", "\"),
+("\", "＼"),
+("]", "]"),
+("]", "」"),
+("]", "』"),
+("]", "】"),
+("]", "］"),
+("]", "〕"),
+("]", "〗"),
+("]", "〛"),
+("^", "^"),
+("^", "＾"),
+("^", "↑"),
+("^", "↓"),
+("_", "_"),
+("_", "＿"),
+("`", "`"),
+("`", "｀"),
+("{", "{"),
+("{", "｛"),
+("|", "|"),
+("|", "｜"),
+("}", "}"),
+("}", "｝"),
+("~", "~"),
+("~", "～"),
+("~", "〜"),
+("~", "々");
+"""
+
 def frequency_row_sql(row):
     return f'("{row["input"]}", {row["freq"]}, {row["chhan_id"]})'
 
@@ -251,6 +373,7 @@ def syls_sql(data):
 def build_sql(freq, conv, syls):
     sql = 'BEGIN TRANSACTION;\n'
     sql += init_db_sql()
+    sql += punctuation_sql()
     sql += frequency_sql(freq)
     sql += conversion_sql(conv)
     sql += syls_sql(syls)
@@ -273,6 +396,7 @@ def build_sqlite_db(db_file, freq, conv, syls):
     con.set_progress_handler(show_progress, 30)
     cur = con.cursor()
     cur.executescript(init_db_sql())
+    cur.executescript(punctuation_sql())
     cur.executescript(frequency_sql(freq))
     cur.executescript(conversion_sql(conv))
     cur.executescript(syls_sql(syls))
