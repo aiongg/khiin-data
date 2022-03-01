@@ -39,6 +39,7 @@ python3 src/sql_gen.py -h
 ```
 mkdir out
 python3 src/sql_gen.py \
+    -j \
     -f data/frequency.csv \
     -c data/conversions_all.csv \
     -s data/syllables.txt \
@@ -57,3 +58,17 @@ python3 src/sql_gen.py \
     -o out/khiin_test_db.sql \
     -d out/khiin_test.db
 ```
+
+## Emoji
+
+The emoji table is taken directly from Unicode's [Full Emoji List, v14.0](https://unicode.org/emoji/charts/full-emoji-list.html).
+
+1. Smileys 🙂
+2. People & Body 👍
+3. Animals & Nature 🐱
+4. Food & Drink 🍌
+5. Travel & Places 🌍
+6. Activities ⚾
+7. Objects 🔔
+8. Symbols 🚻
+9. Flags 🏴‍☠️

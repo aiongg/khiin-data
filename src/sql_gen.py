@@ -390,7 +390,25 @@ def write_sql(sql_file, sql):
 #
 ##############################################################################
 
-def build_sqlite_db(db_file, freq, conv, syls):
+def build_emoji_table(db_cur, emoji_csv):
+    db_cur.executescript("""
+    DROP TABLE IF EXISTS "emoji";
+    CREATE TABLE "emoji" (
+        id INTEGER PRIMARY KEY,
+        emoji TEXT NOT NULL,
+        short_name TEXT NOT NULL,
+        category INTEGER NOT NULL,
+        recent INTEGER NOT NULL,
+        code TEXT NOT NULL
+    );
+    """)
+    dat = []
+    with open(emoji_csv, 'r') as f:
+        rows = csv.DictReader(f)
+        dat = [(x['id'], x['emoji'], x['short_name'], x['category'], x['recent'], x['code']) for x in rows]
+    db_cur.executemany('INSERT INTO "emoji" ("id", "emoji", "short_name", "category", "recent", "code") VALUES (?, ?, ?, ?, ?, ?);', dat)
+
+def build_sqlite_db(db_file, freq, conv, syls, emoji_file):
     print("Building database, please wait...", end='')
     con = sqlite3.connect(db_file)
     con.set_progress_handler(show_progress, 30)
@@ -400,6 +418,10 @@ def build_sqlite_db(db_file, freq, conv, syls):
     cur.executescript(frequency_sql(freq))
     cur.executescript(conversion_sql(conv))
     cur.executescript(syls_sql(syls))
+
+    if emoji_file is not None:
+        build_emoji_table(cur, emoji_file)
+
     cur.executescript('VACUUM;')
 
 ##############################################################################
@@ -428,6 +450,7 @@ parser.add_argument('-o', '--output', metavar='FILE', required=True, help='the o
 parser.add_argument('-x', "--exclude-zeros", action='store_true', help='exclude zero-frequency items from the frequency CSV')
 parser.add_argument('-j', "--hanji-first", action='store_true', help='Automatically weight any Hanji to 1000 and Loji to 900')
 parser.add_argument('-d', '--db', required=False, help='Build an SQlite database directly')
+parser.add_argument('-e', '--emoji', metavar='FILE', help='Include the emoji csv file as a table')
 
 if __name__ == "__main__":
     args = parser.parse_args()
@@ -439,6 +462,7 @@ if __name__ == "__main__":
     exclude_zeros = args.exclude_zeros
     hanji_first = args.hanji_first
     db_file = args.db
+    emoji_file = args.emoji
 
     freq_dat = dedupe_frequencies(parse_freq_csv(freq_file, exclude_zeros))
     conv_dat = dedupe_conversions(parse_conv_csv(conv_file, hanji_first))
@@ -451,7 +475,7 @@ if __name__ == "__main__":
     write_sql(sql_file, sql)
 
     if db_file:
-        build_sqlite_db(db_file, freq_dat, conv_dat, syls_dat)
+        build_sqlite_db(db_file, freq_dat, conv_dat, syls_dat, emoji_file)
 
     print(f"""Output written to {sql_file}:
  - {len(freq_dat)} inputs ("frequency" table)
