@@ -43,6 +43,8 @@ python3 src/sql_gen.py \
     -f data/frequency.csv \
     -c data/conversions_all.csv \
     -s data/syllables.txt \
+    -y data/symbols.tsv \
+    -e data/emoji.csv \
     -o out/khiin_db.sql \
     -d out/khiin.db
 ```

@@ -10,7 +10,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/src/sql_gen.py",
             "console": "integratedTerminal",
-            "args": ["-j", "-f", "data/frequency.csv", "-c", "data/conversions_all.csv", "-s", "data/syllables.txt", "-e", "data/emoji.csv", "-o", "out/khiin_db.sql", "-d", "out/khiin.db"]
+            "args": ["-j", "-f", "data/frequency.csv", "-c", "data/conversions_all.csv", "-s", "data/syllables.txt", "-y", "data/symbols.tsv", "-e", "data/emoji.csv", "-o", "out/khiin_db.sql", "-d", "out/khiin.db"]
         },
         {
             "name": "khiin_test_db",

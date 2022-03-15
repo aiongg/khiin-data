@@ -197,8 +197,8 @@ CREATE TABLE "conversions" (
 );
 
 CREATE TABLE "syllables" (
-    "id" INTEGER PRIMARY KEY,
-    "input" TEXT NOT NULL,
+    "id"      INTEGER PRIMARY KEY,
+    "input"   TEXT NOT NULL,
     UNIQUE("input")
 );
 
@@ -223,128 +223,8 @@ CREATE TABLE IF NOT EXISTS "bigram_freq" (
 CREATE INDEX IF NOT EXISTS "bigram_freq_gram_index" ON "bigram_freq" ("lgram", "rgram");
 """
 
-def punctuation_sql():
-    return """DROP TABLE IF EXISTS "punctuation";
-CREATE TABLE "punctuation" (
-	"id"           INTEGER PRIMARY KEY,
-	"input"        TEXT NOT NULL,
-	"output"       TEXT NOT NULL,
-	"annotation"   TEXT,
-	UNIQUE("input","output")
-);
-INSERT INTO "punctuation" ("input", "output") VALUES
-("!", "!"),
-("!", "！"),
-(\"\"\"\", \"\"\"\"),
-(\"\"\"\", "＂"),
-(\"\"\"\", "“”"),
-(\"\"\"\", "‘’"),
-("#", "#"),
-("#", "＃"),
-("$", "$"),
-("$", "¢"),
-("$", "£"),
-("$", "¥"),
-("$", "€"),
-("$", "₩"),
-("$", "＄"),
-("$", "￠"),
-("$", "￡"),
-("$", "￥"),
-("$", "￦"),
-("$", "₿"),
-("%", "％"),
-("&", "＆"),
-("''", "''"),
-("''", "＇"),
-("''", "’"),
-("''", "‘’"),
-("(", "("),
-("(", "（"),
-("(", "｟"),
-(")", ")"),
-(")", "）"),
-(")", "｠"),
-("*", "*"),
-("*", "＊"),
-("+", "+"),
-("+", "＋"),
-(",", ","),
-(",", "、"),
-(",", "・"),
-("-", "-"),
-("-", "－"),
-("-", "–"),
-("-", "—"),
-(".", "."),
-(".", "。"),
-(".", "…"),
-(".", "。。。"),
-("/", "/"),
-("/", "／"),
-(":", ":"),
-(":", "："),
-(";", ";"),
-(";", "；"),
-("<", "<"),
-("<", "＜"),
-("<", "〈"),
-("<", "《"),
-("<", "≪"),
-("<", "«"),
-("<", "‹"),
-("<", "←"),
-("=", "="),
-("=", "＝"),
-(">", ">"),
-(">", "＞"),
-(">", "〉"),
-(">", "》"),
-(">", "≫"),
-(">", "»"),
-(">", "›"),
-(">", "→"),
-("?", "?"),
-("?", "？"),
-("@", "@"),
-("@", "＠"),
-("[", "["),
-("[", "「"),
-("[", "『"),
-("[", "【"),
-("[", "［"),
-("[", "〔"),
-("[", "〖"),
-("[", "〚"),
-("\", "\"),
-("\", "＼"),
-("]", "]"),
-("]", "」"),
-("]", "』"),
-("]", "】"),
-("]", "］"),
-("]", "〕"),
-("]", "〗"),
-("]", "〛"),
-("^", "^"),
-("^", "＾"),
-("^", "↑"),
-("^", "↓"),
-("_", "_"),
-("_", "＿"),
-("`", "`"),
-("`", "｀"),
-("{", "{"),
-("{", "｛"),
-("|", "|"),
-("|", "｜"),
-("}", "}"),
-("}", "｝"),
-("~", "~"),
-("~", "～"),
-("~", "〜"),
-("~", "々");
-"""
+def symbol_row_sql(row):
+    return f'("row[]"'
 
 def frequency_row_sql(row):
     return f'("{row["input"]}", {row["freq"]}, {row["chhan_id"]})'
@@ -373,7 +253,6 @@ def syls_sql(data):
 def build_sql(freq, conv, syls):
     sql = 'BEGIN TRANSACTION;\n'
     sql += init_db_sql()
-    sql += punctuation_sql()
     sql += frequency_sql(freq)
     sql += conversion_sql(conv)
     sql += syls_sql(syls)
@@ -390,6 +269,23 @@ def write_sql(sql_file, sql):
 #
 ##############################################################################
 
+def build_symbols_table(db_cur, symbol_tsv):
+    db_cur.executescript("""
+    DROP TABLE IF EXISTS "symbols";
+    CREATE TABLE "symbols" (
+        "id"           INTEGER PRIMARY KEY,
+        "input"        TEXT NOT NULL,
+        "output"       TEXT NOT NULL,
+        "category"     INTEGER,
+        "annotation"   TEXT
+    );
+    """)
+    dat = []
+    with open(symbol_tsv, 'r') as f:
+        rows = csv.DictReader(f, delimiter='\t')
+        dat = [(x['input'], x['output'], x['category']) for x in rows]
+    db_cur.executemany('INSERT INTO "symbols" ("input", "output", "category") VALUES (?, ?, ?);', dat)
+
 def build_emoji_table(db_cur, emoji_csv):
     db_cur.executescript("""
     DROP TABLE IF EXISTS "emoji";
@@ -398,26 +294,28 @@ def build_emoji_table(db_cur, emoji_csv):
         emoji TEXT NOT NULL,
         short_name TEXT NOT NULL,
         category INTEGER NOT NULL,
-        recent INTEGER NOT NULL,
         code TEXT NOT NULL
     );
     """)
     dat = []
     with open(emoji_csv, 'r') as f:
         rows = csv.DictReader(f)
-        dat = [(x['id'], x['emoji'], x['short_name'], x['category'], x['recent'], x['code']) for x in rows]
-    db_cur.executemany('INSERT INTO "emoji" ("id", "emoji", "short_name", "category", "recent", "code") VALUES (?, ?, ?, ?, ?, ?);', dat)
+        filter(lambda x: x['recent'] == 1, rows)
+        dat = [(x['id'], x['emoji'], x['short_name'], x['category'],  x['code']) for x in rows]
+    db_cur.executemany('INSERT INTO "emoji" ("id", "emoji", "short_name", "category", "code") VALUES (?, ?, ?, ?, ?);', dat)
 
-def build_sqlite_db(db_file, freq, conv, syls, emoji_file):
+def build_sqlite_db(db_file, freq, conv, syls, symbol_file, emoji_file):
     print("Building database, please wait...", end='')
     con = sqlite3.connect(db_file)
     con.set_progress_handler(show_progress, 30)
     cur = con.cursor()
     cur.executescript(init_db_sql())
-    cur.executescript(punctuation_sql())
     cur.executescript(frequency_sql(freq))
     cur.executescript(conversion_sql(conv))
     cur.executescript(syls_sql(syls))
+
+    if symbol_file is not None:
+        build_symbols_table(cur, symbol_file)
 
     if emoji_file is not None:
         build_emoji_table(cur, emoji_file)
@@ -450,6 +348,7 @@ parser.add_argument('-o', '--output', metavar='FILE', required=True, help='the o
 parser.add_argument('-x', "--exclude-zeros", action='store_true', help='exclude zero-frequency items from the frequency CSV')
 parser.add_argument('-j', "--hanji-first", action='store_true', help='Automatically weight any Hanji to 1000 and Loji to 900')
 parser.add_argument('-d', '--db', required=False, help='Build an SQlite database directly')
+parser.add_argument('-y', '--symbols', metavar='FILE', help='Include a tab-delimited symbols csv table')
 parser.add_argument('-e', '--emoji', metavar='FILE', help='Include the emoji csv file as a table')
 
 if __name__ == "__main__":
@@ -462,6 +361,7 @@ if __name__ == "__main__":
     exclude_zeros = args.exclude_zeros
     hanji_first = args.hanji_first
     db_file = args.db
+    symbol_file = args.symbols
     emoji_file = args.emoji
 
     freq_dat = dedupe_frequencies(parse_freq_csv(freq_file, exclude_zeros))
@@ -475,7 +375,7 @@ if __name__ == "__main__":
     write_sql(sql_file, sql)
 
     if db_file:
-        build_sqlite_db(db_file, freq_dat, conv_dat, syls_dat, emoji_file)
+        build_sqlite_db(db_file, freq_dat, conv_dat, syls_dat, symbol_file, emoji_file)
 
     print(f"""Output written to {sql_file}:
  - {len(freq_dat)} inputs ("frequency" table)
