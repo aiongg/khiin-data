@@ -118,6 +118,35 @@ def dedupe_frequencies(freq_dat):
             ret.append(x)
     return ret
 
+def get_tone_position(syl):
+    found = re.search(r"o[ae][a-z]", syl)
+    if found is not None:
+        return found.start() + 1
+    for x in ['a', 'o', 'e', 'u', 'i', 'ṳ', 'n', 'm']:
+        found = syl.find(x)
+        if found > -1:
+            return found
+    return -1
+
+def add_all_tones(syl):
+    ret = [syl]
+    if re.search(r"[ptkh]ⁿ?$", syl):
+        tones = ['\u030d']
+    else:
+        tones = ['\u0301', '\u0300', '\u0302', '\u0304', '\u0306']
+    pos = get_tone_position(syl) + 1
+    for tone in tones:
+        syl_tone = syl[:pos] + tone + syl[pos:]
+        syl_tone = unicodedata.normalize('NFC', syl_tone)
+        ret.append(syl_tone)
+    return ret
+
+def add_all_tones_multi(syls):
+    ret = []
+    for syl in syls:
+        ret += add_all_tones(syl)
+    return ret
+
 def dedupe_syllables(syl_dat):
     return sorted(list(set(syl_dat)), key=syls_sort_key)
 
@@ -251,12 +280,24 @@ def syls_sql(data):
     return sql
 
 def build_sql(freq, conv, syls):
-    sql = 'BEGIN TRANSACTION;\n'
+    sql = """
+PRAGMA journal_mode = OFF;
+PRAGMA cache_size = 7500000;
+PRAGMA synchronous = OFF;
+PRAGMA temp_store = 2;
+BEGIN TRANSACTION;
+    """
     sql += init_db_sql()
     sql += frequency_sql(freq)
     sql += conversion_sql(conv)
     sql += syls_sql(syls)
-    sql += "COMMIT;\n"
+    sql += """
+COMMIT;
+PRAGMA journal_mode = WAL;
+PRAGMA cache_size = -2000;
+PRAGMA synchronous = NORMAL;
+PRAGMA temp_store = 0;
+    """
     return sql
 
 def write_sql(sql_file, sql):
@@ -309,10 +350,11 @@ def build_sqlite_db(db_file, freq, conv, syls, symbol_file, emoji_file):
     con = sqlite3.connect(db_file)
     con.set_progress_handler(show_progress, 30)
     cur = con.cursor()
-    cur.executescript(init_db_sql())
-    cur.executescript(frequency_sql(freq))
-    cur.executescript(conversion_sql(conv))
-    cur.executescript(syls_sql(syls))
+    cur.executescript(build_sql(freq, conv, syls))
+    # cur.executescript(init_db_sql())
+    # cur.executescript(frequency_sql(freq))
+    # cur.executescript(conversion_sql(conv))
+    # cur.executescript(syls_sql(syls))
 
     if symbol_file is not None:
         build_symbols_table(cur, symbol_file)
@@ -344,6 +386,7 @@ All data files are automatically deduplicated.
 parser.add_argument('-f', "--frequencies", metavar='FILE', required=True, help='the frequencies list CSV file name')
 parser.add_argument('-c', "--conversions", metavar='FILE', required=True, help='the conversion CSV file name')
 parser.add_argument('-s', "--syllables", metavar='FILE', required=False, help='additional list of syllables to include; a plain text file with one syllable per line')
+parser.add_argument('-t', "--tones", action='store_true', help='automatically add all tones to all additional syllables')
 parser.add_argument('-o', '--output', metavar='FILE', required=True, help='the output file name')
 parser.add_argument('-x', "--exclude-zeros", action='store_true', help='exclude zero-frequency items from the frequency CSV')
 parser.add_argument('-j', "--hanji-first", action='store_true', help='Automatically weight any Hanji to 1000 and Loji to 900')
@@ -364,11 +407,20 @@ if __name__ == "__main__":
     symbol_file = args.symbols
     emoji_file = args.emoji
 
-    freq_dat = dedupe_frequencies(parse_freq_csv(freq_file, exclude_zeros))
-    conv_dat = dedupe_conversions(parse_conv_csv(conv_file, hanji_first))
+    freq_csv = parse_freq_csv(freq_file, exclude_zeros)
+    conv_csv = parse_conv_csv(conv_file, hanji_first)
     syls_dat = dedupe_syllables(parse_syls_txt(syls_file))
+    
+    if args.tones:
+        for syl in syls_dat:
+            for sylt in add_all_tones(syl):
+                freq_csv.append({ 'input': sylt, 'freq': 0, 'chhan_id': 99999 })
+                conv_csv.append({ 'input': sylt, 'output': sylt, 'hint': '', 'weight': 900, 'color': '' })
 
-    syls_dat = get_extra_syllables(syls_dat, freq_dat, conv_dat)
+    freq_dat = dedupe_frequencies(freq_csv)
+    conv_dat = dedupe_conversions(conv_csv)
+
+    # syls_dat = get_extra_syllables(syls_dat, freq_dat, conv_dat)
     [freq_dat, conv_dat] = find_common_inputs(freq_dat, conv_dat)
 
     sql = build_sql(freq_dat, conv_dat, syls_dat)
