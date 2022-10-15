@@ -19,6 +19,14 @@
             "program": "${workspaceFolder}/src/sql_gen.py",
             "console": "integratedTerminal",
             "args": ["-x", "-j", "-f", "data/frequency.csv", "-c", "data/conversions_sample.csv", "-o", "out/khiin_test_db.sql", "-d", "out/khiin_test.db"]
+        },
+        {
+            "name": "fhl_output",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/khiin_to_fhl.py",
+            "console": "integratedTerminal",
+            "args": ["-i", "out/khiin.db", "-c", "out/khiin.cin"]
         }
     ]
 }
