@@ -122,7 +122,7 @@ def get_tone_position(syl):
     found = re.search(r"o[ae][a-z]", syl)
     if found is not None:
         return found.start() + 1
-    for x in ['a', 'o', 'e', 'u', 'i', 'ṳ', 'n', 'm']:
+    for x in ['o', 'a', 'e', 'u', 'i', 'ṳ', 'n', 'm']:
         found = syl.find(x)
         if found > -1:
             return found
