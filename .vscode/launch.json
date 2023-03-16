@@ -27,6 +27,13 @@
             "program": "${workspaceFolder}/src/khiin_to_fhl.py",
             "console": "integratedTerminal",
             "args": ["-i", "out/khiin.db", "-c", "out/khiin.cin"]
+        },
+        {
+            "name": "current file",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal"
         }
     ]
 }

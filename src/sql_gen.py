@@ -11,6 +11,8 @@ import re
 import unicodedata
 locale.setlocale(locale.LC_ALL, '')
 
+from lomaji import to_input_sequences
+
 ##############################################################################
 #
 # Utilities
@@ -141,12 +143,6 @@ def add_all_tones(syl):
         ret.append(syl_tone)
     return ret
 
-def add_all_tones_multi(syls):
-    ret = []
-    for syl in syls:
-        ret += add_all_tones(syl)
-    return ret
-
 def dedupe_syllables(syl_dat):
     return sorted(list(set(syl_dat)), key=syls_sort_key)
 
@@ -175,6 +171,19 @@ def find_common_inputs(freq, conv):
     conv = sorted(conv_has_freq, key=conv_sort_key)
     return [freq, conv]
 
+def get_input_sequences(freq):
+    input_seqs = []
+    for row in freq:
+        row_seqs = to_input_sequences(row['input'])
+        for pair in row_seqs:
+            input_seqs.append({
+                'input': row['input'],
+                'numeric': pair[0],
+                'telex': pair[1]
+            })
+    return input_seqs
+
+
 def get_extra_syllables(syls, freq, conv):
     ret = set(syls)
     for x in freq:
@@ -195,6 +204,8 @@ def init_db_sql():
     return """DROP TABLE IF EXISTS "version";
 DROP TABLE IF EXISTS "conversions";
 DROP TABLE IF EXISTS "frequency";
+DROP TABLE IF EXISTS "input_numeric";
+DROP TABLE IF EXISTS "input_telex";
 DROP TABLE IF EXISTS "syllables";
 DROP INDEX IF EXISTS "unigram_freq_gram_idx";
 DROP TABLE IF EXISTS "unigram_freq";
@@ -214,18 +225,34 @@ CREATE TABLE IF NOT EXISTS "frequency" (
 	UNIQUE("input")
 );
 
-CREATE TABLE "conversions" (
-	"id"           INTEGER PRIMARY KEY,
-	"input_id"     INTEGER,
-	"output"       TEXT NOT NULL,
-	"weight"       INTEGER,
-	"category"     INTEGER,
-	"annotation"   TEXT,
-	UNIQUE("input_id","output"),
+CREATE TABLE IF NOT EXISTS "conversions" (
+    "id"           INTEGER PRIMARY KEY,
+    "input_id"     INTEGER,
+    "output"       TEXT NOT NULL,
+    "weight"       INTEGER,
+    "category"     INTEGER,
+    "annotation"   TEXT,
+    UNIQUE("input_id","output"),
     FOREIGN KEY("input_id") REFERENCES "frequency"("id")
 );
 
-CREATE TABLE "syllables" (
+CREATE TABLE IF NOT EXISTS "input_numeric" (
+    "id"            INTEGER PRIMARY KEY,
+    "input_id"      INTEGER,
+    "key_sequence"  TEXT NOT NULL,
+    UNIQUE("input_id","key_sequence"),
+    FOREIGN KEY("input_id") REFERENCES "frequency"("id")
+);
+
+CREATE TABLE IF NOT EXISTS "input_telex" (
+    "id"            INTEGER PRIMARY KEY,
+    "input_id"      INTEGER,
+    "key_sequence"  TEXT NOT NULL,
+    UNIQUE("input_id","key_sequence"),
+    FOREIGN KEY("input_id") REFERENCES "frequency"("id")
+);
+
+CREATE TABLE IF NOT EXISTS "syllables" (
     "id"      INTEGER PRIMARY KEY,
     "input"   TEXT NOT NULL,
     UNIQUE("input")
@@ -268,9 +295,20 @@ def conversion_row_sql(row):
     return f'INSERT INTO "conversions" ("input_id", "output", "weight") SELECT "id", "{row["output"]}", {row["weight"]} FROM "frequency" WHERE "input"="{row["input"]}";'
 
 def conversion_sql(data):
-    # sql = 'INSERT INTO "conversions"\n'
     values = [conversion_row_sql(row) for row in data]
     sql = '\n'.join(values) + '\n'
+    return sql
+
+def telex_input_row_sql(row):
+    return f'INSERT INTO "input_telex" ("input_id", "key_sequence") SELECT "id", "{row["telex"]}" FROM "frequency" WHERE "input"="{row["input"]}";'
+
+def numeric_input_row_sql(row):
+    return f'INSERT INTO "input_numeric" ("input_id", "key_sequence") SELECT "id", "{row["numeric"]}" FROM "frequency" WHERE "input"="{row["input"]}";'
+
+def input_sql(data):
+    numeric = [numeric_input_row_sql(row) for row in data]
+    telex = [telex_input_row_sql(row) for row in data]
+    sql = '\n'.join(numeric) + '\n' + '\n'.join(telex) + '\n'
     return sql
 
 def syls_sql(data):
@@ -279,7 +317,7 @@ def syls_sql(data):
     sql += values + ';\n'
     return sql
 
-def build_sql(freq, conv, syls):
+def build_sql(freq, conv, inputs, syls):
     sql = """
 PRAGMA journal_mode = OFF;
 PRAGMA cache_size = 7500000;
@@ -290,6 +328,7 @@ BEGIN TRANSACTION;
     sql += init_db_sql()
     sql += frequency_sql(freq)
     sql += conversion_sql(conv)
+    sql += input_sql(inputs)
     sql += syls_sql(syls)
     sql += """
 COMMIT;
@@ -345,12 +384,12 @@ def build_emoji_table(db_cur, emoji_csv):
         dat = [(x['id'], x['emoji'], x['short_name'], x['category'],  x['code']) for x in rows]
     db_cur.executemany('INSERT INTO "emoji" ("id", "emoji", "short_name", "category", "code") VALUES (?, ?, ?, ?, ?);', dat)
 
-def build_sqlite_db(db_file, freq, conv, syls, symbol_file, emoji_file):
+def build_sqlite_db(db_file, freq, conv, inputs, syls, symbol_file, emoji_file):
     print("Building database, please wait...", end='')
     con = sqlite3.connect(db_file)
     con.set_progress_handler(show_progress, 30)
     cur = con.cursor()
-    cur.executescript(build_sql(freq, conv, syls))
+    cur.executescript(build_sql(freq, conv, inputs, syls))
     # cur.executescript(init_db_sql())
     # cur.executescript(frequency_sql(freq))
     # cur.executescript(conversion_sql(conv))
@@ -422,12 +461,13 @@ if __name__ == "__main__":
 
     # syls_dat = get_extra_syllables(syls_dat, freq_dat, conv_dat)
     [freq_dat, conv_dat] = find_common_inputs(freq_dat, conv_dat)
+    input_dat = get_input_sequences(freq_dat)
 
-    sql = build_sql(freq_dat, conv_dat, syls_dat)
+    sql = build_sql(freq_dat, conv_dat, input_dat, syls_dat)
     write_sql(sql_file, sql)
 
     if db_file:
-        build_sqlite_db(db_file, freq_dat, conv_dat, syls_dat, symbol_file, emoji_file)
+        build_sqlite_db(db_file, freq_dat, conv_dat, input_dat, syls_dat, symbol_file, emoji_file)
 
     print(f"""Output written to {sql_file}:
  - {len(freq_dat)} inputs ("frequency" table)

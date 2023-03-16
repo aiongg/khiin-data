@@ -5,52 +5,13 @@ import sqlite3
 import time
 import unicodedata
 
-ASCII_SUBS = [
-    (r'\u207F', 'nn'),
-    (r'\u0358', 'u'),
-    (r'\u0301', '2'),
-    (r'\u0300', '3'),
-    (r'\u0302', '5'),
-    (r'\u0304', '7'),
-    (r'\u030D', '8'),
-    (r'\u0306', '9'),
-    (r'\u0324', 'r'),
-]
-
-KIP_SUBS = [
-    (r'ch', 'ts'),
-    (r'oa', 'ua'),
-    (r'oe', 'ue'),
-    (r'ou', 'oo'),
-    (r'eng', 'ing'),
-    (r'ek', 'ik'),
-]
+from lomaji import *
 
 def get_cursor(file):
     con = sqlite3.connect(file)
     con.row_factory = sqlite3.Row
     cur = con.cursor()
     return cur
-
-def poj_to_ascii(text):
-    text = unicodedata.normalize('NFD', text)
-    for sub in ASCII_SUBS:
-        text = re.sub(sub[0], sub[1], text)
-    text = re.sub(r'([A-Za-z]+)(\d)([A-Za-z]+)', r'\1\3\2', text).lower()
-    return text
-
-def poj_to_qstring(text):
-    text = poj_to_ascii(text)
-    if re.search(r' ', text) is not None:
-        text = re.sub(r'\d| +', '', text)
-    return text
-
-def poj_to_reading(text):
-    text = poj_to_ascii(text)
-    for sub in KIP_SUBS:
-        text = re.sub(sub[0], sub[1], text)
-    text = re.sub(r' ', '-', text)
-    return text
 
 def get_freq_data(cur):
     res = cur.execute("select * from frequency")
@@ -78,7 +39,7 @@ def get_wordlist(db_cur):
             # if has_non_hanji(output):
             #     continue
 
-            word_list.append({ 'reading': poj_to_reading(input),'qstring': poj_to_qstring(input), 'value': output, })
+            word_list.append({ 'reading': poj_to_fhl_reading(input),'qstring': poj_to_fhl_qstring(input), 'value': output, })
 
     return word_list
 
