@@ -201,7 +201,7 @@ def get_extra_syllables(syls, freq, conv):
 ##############################################################################
 
 def init_db_sql():
-    return """DROP TABLE IF EXISTS "version";
+    return """DROP TABLE IF EXISTS "metadata";
 DROP TABLE IF EXISTS "conversions";
 DROP TABLE IF EXISTS "frequency";
 DROP TABLE IF EXISTS "input_numeric";
@@ -212,7 +212,7 @@ DROP TABLE IF EXISTS "unigram_freq";
 DROP INDEX IF EXISTS "bigram_freq_gram_index";
 DROP TABLE IF EXISTS "bigram_freq";
 
-CREATE TABLE IF NOT EXISTS "version" (
+CREATE TABLE IF NOT EXISTS "metadata" (
     "key"	TEXT,
     "value"	INTEGER
 );
@@ -226,7 +226,6 @@ CREATE TABLE IF NOT EXISTS "frequency" (
 );
 
 CREATE TABLE IF NOT EXISTS "conversions" (
-    "id"           INTEGER PRIMARY KEY,
     "input_id"     INTEGER,
     "output"       TEXT NOT NULL,
     "weight"       INTEGER,
@@ -237,7 +236,6 @@ CREATE TABLE IF NOT EXISTS "conversions" (
 );
 
 CREATE TABLE IF NOT EXISTS "input_numeric" (
-    "id"            INTEGER PRIMARY KEY,
     "input_id"      INTEGER,
     "key_sequence"  TEXT NOT NULL,
     UNIQUE("input_id","key_sequence"),
@@ -245,7 +243,6 @@ CREATE TABLE IF NOT EXISTS "input_numeric" (
 );
 
 CREATE TABLE IF NOT EXISTS "input_telex" (
-    "id"            INTEGER PRIMARY KEY,
     "input_id"      INTEGER,
     "key_sequence"  TEXT NOT NULL,
     UNIQUE("input_id","key_sequence"),
@@ -253,30 +250,103 @@ CREATE TABLE IF NOT EXISTS "input_telex" (
 );
 
 CREATE TABLE IF NOT EXISTS "syllables" (
-    "id"      INTEGER PRIMARY KEY,
-    "input"   TEXT NOT NULL,
-    UNIQUE("input")
+    "input"   TEXT NOT NULL UNIQUE
 );
 
 CREATE TABLE IF NOT EXISTS "unigram_freq" (
-    "id"	INTEGER,
     "gram"	TEXT NOT NULL UNIQUE,
-    "n"	INTEGER NOT NULL,
-    PRIMARY KEY("id")
+    "n"	INTEGER NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS "unigram_freq_gram_idx" ON "unigram_freq" ("gram");
-
 CREATE TABLE IF NOT EXISTS "bigram_freq" (
-    "id"	INTEGER,
     "lgram"	TEXT,
     "rgram"	TEXT,
     "n"	INTEGER NOT NULL,
-    PRIMARY KEY("id"),
     UNIQUE("lgram","rgram")
 );
 
-CREATE INDEX IF NOT EXISTS "bigram_freq_gram_index" ON "bigram_freq" ("lgram", "rgram");
+CREATE INDEX "conversions_input_id_covering_index" ON "conversions" (
+	"input_id",
+    "output",
+    "weight",
+    "category",
+    "annotation"
+);
+
+CREATE INDEX "input_numeric_covering_index" ON "input_numeric" (
+    "key_sequence",
+    "input_id"
+);
+
+CREATE INDEX "input_telex_covering_index" ON "input_telex" (
+    "key_sequence",
+    "input_id"
+);
+
+CREATE INDEX "unigram_gram_index" ON "unigram_freq" (
+    "gram"
+);
+
+CREATE INDEX "bigram_gram_index" ON "bigram_freq" (
+    "rgram",
+    "lgram"
+);
+
+DROP VIEW IF EXISTS "lookup_numeric";
+CREATE VIEW "lookup_numeric" (
+    key_sequence,
+    input,
+    input_id,
+    output,
+    weight,
+    category,
+    annotation
+) as SELECT
+    n.key_sequence,
+    f.input,
+    n.input_id,
+    c.output,
+    c.weight,
+    c.category,
+    c.annotation
+FROM input_numeric AS n
+JOIN frequency AS f ON f.id = n.input_id
+JOIN conversions AS c ON f.id = c.input_id;
+
+DROP VIEW IF EXISTS "lookup_telex";
+CREATE VIEW "lookup_telex" (
+    key_sequence,
+    input,
+    input_id,
+    output,
+    weight,
+    category,
+    annotation
+) as SELECT
+    t.key_sequence,
+    f.input,
+    t.input_id,
+    c.output,
+    c.weight,
+    c.category,
+    c.annotation
+FROM input_telex AS t
+JOIN frequency AS f ON f.id = t.input_id
+JOIN conversions AS c ON f.id = c.input_id;
+
+DROP VIEW IF EXISTS "ngrams";
+CREATE VIEW "ngrams" (
+    lgram,
+    rgram,
+    rgram_count,
+    bigram_count
+) AS SELECT
+    b.lgram,
+    u.gram,
+    u.n AS unigram_count,
+    b.n AS bigram_count
+FROM unigram_freq AS u
+LEFT JOIN bigram_freq AS b ON u.gram = b.rgram;
 """
 
 def symbol_row_sql(row):
@@ -329,7 +399,7 @@ BEGIN TRANSACTION;
     sql += frequency_sql(freq)
     sql += conversion_sql(conv)
     sql += input_sql(inputs)
-    sql += syls_sql(syls)
+    sql += syls_sql(syls) if (len(syls) > 0) else ""
     sql += """
 COMMIT;
 PRAGMA journal_mode = WAL;

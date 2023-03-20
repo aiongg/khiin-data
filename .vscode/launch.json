@@ -10,7 +10,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/src/sql_gen.py",
             "console": "integratedTerminal",
-            "args": ["-j", "-f", "data/frequency.csv", "-c", "data/conversions_all.csv", "-s", "data/syllables.txt", "-t", "-y", "data/symbols.tsv", "-e", "data/emoji.csv", "-o", "out/khiin_db.sql", "-d", "out/khiin.db"]
+            "args": ["-f", "data/frequency.csv", "-c", "data/conversions_all.csv", "-s", "data/syllables.txt", "-t", "-y", "data/symbols.tsv", "-e", "data/emoji.csv", "-o", "out/khiin_db.sql", "-d", "out/khiin.db"]
         },
         {
             "name": "khiin_test_db",
@@ -18,7 +18,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/src/sql_gen.py",
             "console": "integratedTerminal",
-            "args": ["-x", "-j", "-f", "data/frequency.csv", "-c", "data/conversions_sample.csv", "-o", "out/khiin_test_db.sql", "-d", "out/khiin_test.db"]
+            "args": ["-x", "-j", "-f", "data/frequency.csv", "-c", "data/conversions_sample.csv", "-s", "data/syllables.txt", "-y", "data/symbols.tsv", "-o", "out/khiin_test_db.sql", "-d", "out/khiin_test.db"]
         },
         {
             "name": "fhl_output",

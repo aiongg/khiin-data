@@ -79,7 +79,7 @@ def always_same(n, val):
 
 def to_input_sequences(word: str) -> list[str]:
     syls = re.compile('[ -]').split(word)
-    strip_tones = len(syls) > 1
+    strip_tones = True # len(syls) > 1
     syls = list(map(poj_to_khiin, syls, always_same(len(syls), strip_tones)))
     numeric_syls = [x[0] for x in syls]
     telex_syls = [x[1] for x in syls]
